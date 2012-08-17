@@ -23,7 +23,7 @@ Quick-Start Guide
 
 3. Just use it by running couch.php or lucene.php from your browser
 
-        
+
 Requests
 ========
 		
