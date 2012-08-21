@@ -11,7 +11,7 @@ I also know I should've created a couch app, but this way was faster.
 Screenshots
 ===========
 
-Here's a screen for [CouchDB](http://tour2thailand.com/tmp/github/couch1.png) query helper and here's another for [Lucene](http://tour2thailand.com/tmp/github/lucene1.png)
+Here's a screen for [CouchDB](http://tour2thailand.com/tmp/github/couch2.png) query helper and here's another for [Lucene](http://tour2thailand.com/tmp/github/lucene2.png)
 
 
 Quick-Start Guide
@@ -33,7 +33,7 @@ Quick-Start Guide
 Requests
 ========
 		
-If anyone knows a good and free JSON formatting tool for PHP, please, let me know
+Do fork and send pull requests if you wish to modify or add something
 
 		
 Feedback
