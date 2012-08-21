@@ -79,9 +79,37 @@ if(!empty($cmd)) {
 			$url = $url2.'/'.$ddoc.'/'.$view.'?'.$url;
 		}
 		
-		echo '<pre>QUERY URL: '.$url.'</pre>';
-		echo '<pre>QUERY TIME: ~'.intval($time_diff/1000).' sec ('.$time_diff.' ms)</pre>';
-		echo '<pre>'.print_r($res, true).'</pre>';
+		if(!isset($opts['limit'])) {
+			echo '<div class="qr_item">NOTE:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Default limit is imposed (see <i>couchdb-lucene.ini</i>)</div>';
+		}
+		
+		echo '<div class="qr_item">REST URL:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'.$url.'</div>';
+		echo '<div class="qr_item">QUERY TIME:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;~'.intval($time_diff/1000).' sec ('.$time_diff.' ms)</div>';
+		
+		$res_format = post_var('result_format');
+		if($res_format == 'raw') {
+			echo '<div class="qr_item">QUERY RESULT:</div>';
+			echo '<div class="qr_item">'.json_encode_and_format($res).'</div>';
+		}
+		else if($res_format == 'tree') {
+			echo '<div class="qr_item">TOTAL ROWS:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'.$res->total_rows.'</div>';
+			echo '<div class="qr_item">ETAG:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'.$res->etag.'</div>';
+			echo '<div class="qr_item">SEARCH DURATION:&nbsp;'.$res->search_duration.'</div>';
+			echo '<div class="qr_item">FETCH DURATION:&nbsp;&nbsp;'.$res->fetch_duration.'</div>';
+			echo '<div class="qr_item">RESULT ROWS:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'.count($res->rows).'</div>';
+			echo '<div class="qr_item">QUERY RESULT:</div>';
+			$cnt = 0;
+			foreach($res->rows as $row) {
+				$key = new stdClass();
+				$key->score = $row->score;
+				$key->id = $row->id;
+				
+				echo '<div class="qr_item">';
+					echo '<div class="qr_tree_item clickable">'.json_encode($key).'</div>';
+					echo '<div class="qr_tree_content"'.(++$cnt>1?' style="display: none;"':'').'>'.json_encode_and_format($row).'</div>';
+				echo '</div>';
+			}
+		}
 	}
 	else if($cmd == 'ddoc_views') {
 		$ddoc = post_var('ddoc_id');	
@@ -123,11 +151,8 @@ if(!empty($cmd)) {
 			
 			if(isset($res->fields)) {
 				foreach($res->fields as &$field) {
-					$type = get_field_type_from_doc($view_doc, $field);
+					$type = lucene_get_field_type_from_doc($view_doc, $field);
 					if(!empty($type)) $field = $field.'<'.$type.'>';
-		
-		
-					//echo '<span class="ddoc_view_field" val="'.$field.'">'.htmlspecialchars($field).'</span>&nbsp;';
 				}
 			}
 			
@@ -157,46 +182,6 @@ catch(Exception $e) {
 	die('Failed retrieving all design documents');
 }
 
-function get_field_type_from_doc($view_doc, $field) {
-	if(empty($view_doc)) return '';
-	
-	$matches = array();
-	
-	if(!preg_match("/field[ ]*:[ ]*('|\"|\\\"|\\\')".$field."('|\"|\\\"|\\\')/", $view_doc, $matches)) {
-		return '';
-	} 
-
-	//echo '<span>1</span><br>';
-	
-	$inx = strpos($view_doc, $matches[0]);
-
-	for(;$inx >= 0 && substr($view_doc, $inx, 1) != '{';$inx--) {}
-
-	$start = $inx;
-
-	//echo '<span>'.$start.'</span><br>';
-	
-	$len = strlen($view_doc);
-	for(;$inx < $len && substr($view_doc, $inx, 1) != '}';$inx++) {}
-
-	$end = $inx;
-
-	//echo '<span>'.$end.'</span><br>';
-	
-	$view_doc = substr($view_doc, $start, $end-$start+1);
-
-	//echo '<span>'.$view_doc.'</span><br>';
-	
-	$type = '';
-	if(preg_match("/type[ ]*:[ ]*('|\"|\\\"|\\\')([a-zA-Z]*)('|\"|\\\"|\\\')/", $view_doc, $matches)) {
-		$type = $matches[2];
-	} 
-	
-	//echo '<span>'.$type.'</span><br>';
-	
-	return $type;
-}
-
 ?>
 
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -214,14 +199,17 @@ input, select, textarea{ border: 1px solid #CCC; font-family: Courier New; margi
 button { background-color: #E9E9E9; border: 1px solid #CCC; font-family: Courier New;  }
 button:hover { background-color: #F0F0F0; }
 
+.clickable { cursor: pointer; }
 .float_left { float: left; }
 .float_right { float: right; }
 .clear { clear: both; }
 
 .ddoc_view_field { display: inline-block; padding: 3px 5px; margin-bottom: 3px; font-size: 12px; background-color: #F0F0F0; font-weight: bold; cursor: pointer; }
 #q_input { width: 650px; height: 80px; }
-#query_toolbar { position: absolute; right: 10px; top: -42px; }
-#query_result pre { font-family: Courier New; font-size: 12px; word-wrap: break-word; }
+#query_result .qr_item { font-family: Courier New; font-size: 12px; margin-bottom: 5px; }
+#query_result .qr_tree_item { font-weight: bold; }
+#query_result .qr_tree_item:hover { background-color: #F9F9F9; }
+#query_result .qr_tree_content { padding-left: 20px; }
 #limit_input, #skip_input { width: 40px; }
 </style>
 <script type="text/javascript">
@@ -341,12 +329,27 @@ $(function() {
 		params.skip = $('#skip_input').val();
 		params.sort = ($('#sort_field_sel').val().length > 0) ? $('#sort_ord_sel').val()+$('#sort_field_sel').val() : '';
 		
+		params.result_format = 'raw';
+		if($('#qr_fmt_tree').is(':checked')) {
+			params.result_format = 'tree';
+		}
+		
 		$.ajax({
 			url: 'lucene.php',
 			type: 'POST',
 			dataType: 'html',
 			data: params,
 			success: function(resp) {
+				if(params.result_format == 'tree') {
+					resp = $(resp);
+					$('.qr_tree_item', resp).click(function() {
+						var ct = $(this).siblings('.qr_tree_content');
+						if(ct.is(':visible')) ct.hide();
+						else ct.show();
+						ct = null;
+					});
+				}
+				
 				$('#query_result').html(resp);
 				$('#query_loading').hide();
 			},
@@ -358,6 +361,8 @@ $(function() {
 	});
 	
 	$('#btn_qtb_font_larger, #btn_qtb_font_smaller').click(function(evt) {
+		evt.preventDefault();
+		
 		if($('#query_result > pre').size() == 0) return ;
 		
 		var inc = $(this).attr('id') == 'btn_qtb_font_smaller' ? -1 : 1;
@@ -447,16 +452,26 @@ function escapeHtml(unsafe) {
 			<div id="query_loading" class="float_left" style="display: none; margin-left: 10px;">
 				<img src="common/loading.gif" alt="" />
 			</div>
+			<div id="query_toolbar" class="float_right">
+				<div class="float_right">
+					<button id="btn_qtb_font_larger">A+</button>
+					<button id="btn_qtb_font_smaller">A-</button>
+				</div>
+				<div class="float_right">
+					<div style="margin: 0 20px 0 0;">
+						<input id="qr_fmt_tree" class="qr_fmt" name="qr_fmt" type="radio" value="tree" checked="checked" />
+						<label for="qr_fmt_tree"><b>Tree</b></label>
+						
+						<input id="qr_fmt_raw" class="qr_fmt" name="qr_fmt" type="radio" value="raw" />
+						<label for="qr_fmt_raw"><b>Raw</b></label>
+					</div>
+					<div class="clear"></div>
+				</div>
+			</div>
 			<div class="clear"></div>
 		</div>
 	</form>
 	
-	<div style="position: relative; margin: 0 30px 20px 0;">
-		<div id="query_toolbar">
-			<button id="btn_qtb_font_larger">A+</button>
-			<button id="btn_qtb_font_smaller">A-</button>
-		</div>
-		<div id="query_result"></div>
-	</div>
+	<div id="query_result" style="margin: 0 0 20px 0;"></div>
 </body>
 </html>

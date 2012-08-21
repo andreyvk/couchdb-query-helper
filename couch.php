@@ -20,15 +20,17 @@ if(!empty($cmd)) {
 		$ksel = post_var('ksel');
 		if($ksel == 'key') { 
 			$kval = stripslashes(post_var('key'));
-			$opts['key'] = json_decode($kval);
-			
-			$url .= (!empty($url)?'&':'').'key='.$kval;
+			if(!empty($kval)) {
+				$opts['key'] = json_decode($kval);
+				$url .= (!empty($url)?'&':'').'key='.$kval;
+			}
 		} 
 		else if($ksel == 'keys') { 
 			$kval = '['.stripslashes(post_var('keys')).']';
-			$opts['keys'] = json_decode($kval);
-			
-			$url .= (!empty($url)?'&':'').'keys='.$kval;
+			if(!empty($kval)) {
+				$opts['keys'] = json_decode($kval);
+				$url .= (!empty($url)?'&':'').'keys='.$kval;
+			}
 		}
 		else if($ksel == 'sekeys') {
 			$kval = stripslashes(post_var('startkey'));
@@ -102,10 +104,10 @@ if(!empty($cmd)) {
 			$res = $cdb->setQueryParameters($opts)->getView($postf, $view);
 		}
 		catch(Exception $e) {
-			echo '<pre>'.$e->getCode().': '.$e->getMessage().'</pre>';
+			echo '<div class="qr_item">'.$e->getCode().': '.$e->getMessage().'</div>';
 			exit();
 		}
-		
+	
 		$time_diff = millis_time()-$start_time;
 		
 		$url_parts = parse_url($cdb->getDatabaseUri());
@@ -122,9 +124,27 @@ if(!empty($cmd)) {
 			$url = $url2.'/'.$ddoc.'/_view/'.$view.'?'.$url;
 		}
 		
-		echo '<pre>QUERY URL: '.$url.'</pre>';
-		echo '<pre>QUERY TIME: ~'.intval($time_diff/1000).' sec ('.$time_diff.' ms)</pre>';
-		echo '<pre>'.print_r($res, true).'</pre>';
+		echo '<div class="qr_item">REST URL:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'.$url.'</div>';
+		echo '<div class="qr_item">QUERY TIME:&nbsp;&nbsp;~'.intval($time_diff/1000).' sec ('.$time_diff.' ms)</div>';
+		
+		$res_format = post_var('result_format');
+		if($res_format == 'raw') {
+			echo '<div class="qr_item">QUERY RESULT:</div>';
+			echo '<div class="qr_item">'.json_encode_and_format($res).'</div>';
+		}
+		else if($res_format == 'tree') {
+			echo '<div class="qr_item">TOTAL ROWS:&nbsp;&nbsp;&nbsp;'.$res->total_rows.'</div>';
+			echo '<div class="qr_item">OFFSET:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'.$res->offset.'</div>';
+			echo '<div class="qr_item">RESULT ROWS:&nbsp;&nbsp;'.count($res->rows).'</div>';
+			echo '<div class="qr_item">QUERY RESULT:</div>';
+			$cnt = 0;
+			foreach($res->rows as $row) {
+				echo '<div class="qr_item">';
+					echo '<div class="qr_tree_item clickable">'.json_encode($row->key).'</div>';
+					echo '<div class="qr_tree_content"'.(++$cnt>1?' style="display: none;"':'').'>'.json_encode_and_format($row).'</div>';
+				echo '</div>';
+			}
+		}
 	}
 	else if($cmd == 'ddoc_views') {
 		$ddoc = post_var('ddoc_id');	
@@ -170,10 +190,10 @@ if(!empty($cmd)) {
 			$info['has_reduce']	= !empty($ddoc->views->{$view}->reduce);
 
 			if(!empty($res->rows[0])) {
-				$info['key_formats'] = get_view_result_key_formats($res);
+				$info['key_formats'] = couch_get_view_result_key_formats($res);
 			}
 			else { //get generic key format from map function
-				$info['key_formats'] = get_map_func_key_formats($map_func);
+				$info['key_formats'] = couch_get_map_func_key_formats($map_func);
 			}
 			
 			echo json_encode(array('info'=>$info));
@@ -203,33 +223,6 @@ catch(Exception $e) {
 	die('Failed retrieving all design documents');
 }
 
-function get_view_result_key_formats($result) {
-	$formats = array();
-	foreach($result->rows as $row) {
-		$format = get_view_result_key_format($row->key);
-		$formats[$format] = true;
-	}
-	return array_keys($formats);
-}
-
-function get_view_result_key_format($key) {
-	if(!is_array($key)) {
-		return strtolower(gettype($key));
-	}
-	else {
-		$format = '';
-		foreach($key as $ki) {
-			$format .= (!empty($format)?', ':'').get_view_result_key_format($ki);
-		}
-	}
-	
-	return '['.$format.']';
-}
-
-function get_map_func_key_formats($map_func) {
-	return array();
-}
-
 ?>
 
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -247,13 +240,16 @@ input, select, textarea { border: 1px solid #CCC; font-family: Courier New; marg
 button { background-color: #E9E9E9; border: 1px solid #CCC; font-family: Courier New;  }
 button:hover { background-color: #F0F0F0; }
 
+.clickable { cursor: pointer; }
 .float_left { float: left; }
 .float_right { float: right; }
 .clear { clear: both; }
 
 .ksel_tab textarea { width: 650px; height: 15px; }
-#query_toolbar { position: absolute; right: 10px; top: -42px; }
-#query_result pre { font-family: Courier New; font-size: 12px; }
+#query_result .qr_item { font-family: Courier New; font-size: 12px; margin-bottom: 5px; }
+#query_result .qr_tree_item { font-weight: bold; }
+#query_result .qr_tree_item:hover { background-color: #F9F9F9; }
+#query_result .qr_tree_content { padding-left: 20px; }
 #limit_input, #skip_input { width: 40px; }
 #group_lvl_input { width: 40px; }
 
@@ -387,6 +383,11 @@ $(function() {
 		params.limit = $('#limit_input').val();
 		params.skip = $('#skip_input').val();
 		
+		params.result_format = 'raw';
+		if($('#qr_fmt_tree').is(':checked')) {
+			params.result_format = 'tree';
+		}
+		
 		if($('#reduce_controls').data('has_reduce')) {
 			params.reduce = $('#reduce_input').is(':checked') ? 1 : 0;
 			if(params.reduce == 1) {
@@ -401,6 +402,15 @@ $(function() {
 			dataType: 'html',
 			data: params,
 			success: function(resp) {
+				if(params.result_format == 'tree') {
+					resp = $(resp);
+					$('.qr_tree_item', resp).click(function() {
+						var ct = $(this).siblings('.qr_tree_content');
+						if(ct.is(':visible')) ct.hide();
+						else ct.show();
+						ct = null;
+					});
+				}
 				$('#query_result').html(resp);
 				$('#query_loading').hide();
 			},
@@ -412,13 +422,15 @@ $(function() {
 	});
 	
 	$('#btn_qtb_font_larger, #btn_qtb_font_smaller').click(function(evt) {
-		if($('#query_result > pre').size() == 0) return ;
+		evt.preventDefault();
+		
+		if($('#query_result > .qr_item').size() == 0) return ;
 		
 		var inc = $(this).attr('id') == 'btn_qtb_font_smaller' ? -1 : 1;
 		
-		var fontsize = $('#query_result > pre').css('font-size');
+		var fontsize = $('#query_result > .qr_item').css('font-size');
 		fontsize = parseInt(fontsize)+inc;
-		$('#query_result > pre').css('font-size', fontsize+'px');
+		$('#query_result > .qr_item').css('font-size', fontsize+'px');
 	});
 	
 	$('#reduce_input').change(function() {
@@ -540,16 +552,26 @@ $(function() {
 			<div id="query_loading" class="float_left" style="display: none; margin-left: 10px;">
 				<img src="common/loading.gif" alt="" />
 			</div>
+			<div id="query_toolbar" class="float_right">
+				<div class="float_right">
+					<button id="btn_qtb_font_larger">A+</button>
+					<button id="btn_qtb_font_smaller">A-</button>
+				</div>
+				<div class="float_right">
+					<div style="margin: 0 20px 0 0;">
+						<input id="qr_fmt_tree" class="qr_fmt" name="qr_fmt" type="radio" value="tree" checked="checked" />
+						<label for="qr_fmt_tree"><b>Tree</b></label>
+						
+						<input id="qr_fmt_raw" class="qr_fmt" name="qr_fmt" type="radio" value="raw" />
+						<label for="qr_fmt_raw"><b>Raw</b></label>
+					</div>
+					<div class="clear"></div>
+				</div>
+			</div>
 			<div class="clear"></div>
 		</div>
 	</form>
 	
-	<div style="position: relative; margin: 0 30px 20px 0;">
-		<div id="query_toolbar">
-			<button id="btn_qtb_font_larger">A+</button>
-			<button id="btn_qtb_font_smaller">A-</button>
-		</div>
-		<div id="query_result"></div>
-	</div>
+	<div id="query_result" style="margin: 0 0 20px 0;"></div>
 </body>
 </html>
