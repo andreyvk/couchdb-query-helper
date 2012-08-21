@@ -8,6 +8,12 @@ I've created this project because of lack of querying capabilities in CouchDB's 
 I also know I should've created a couch app, but this way was faster.
 
 
+Screenshots
+===========
+
+Here's a screen for [CouchDB](http://tour2thailand.com/tmp/github/couch1.png) query helper and here's another for [Lucene](http://tour2thailand.com/tmp/github/lucene1.png)
+
+
 Quick-Start Guide
 =================
 
