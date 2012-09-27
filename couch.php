@@ -18,53 +18,53 @@ if(!empty($cmd)) {
 		if(empty($ddoc) || empty($view)) exit();
 		
 		
-		$url = '';
+		$query_string = '';
 		
 		$ksel = post_var('ksel');
 		if($ksel == 'key') { 
 			$kval = stripslashes(post_var('key'));
 			if(!empty($kval)) {
 				$opts['key'] = json_decode($kval);
-				$url .= (!empty($url)?'&':'').'key='.$kval;
+				$query_string .= (!empty($query_string)?'&':'').'key='.$kval;
 			}
 		} 
 		else if($ksel == 'keys') { 
 			$kval = '['.stripslashes(post_var('keys')).']';
 			if(!empty($kval)) {
 				$opts['keys'] = json_decode($kval);
-				$url .= (!empty($url)?'&':'').'keys='.$kval;
+				$query_string .= (!empty($query_string)?'&':'').'keys='.$kval;
 			}
 		}
 		else if($ksel == 'sekeys') {
 			$kval = stripslashes(post_var('startkey'));
 			if(!empty($kval)) {
 				$opts['startkey'] = json_decode($kval);
-				$url .= (!empty($url)?'&':'').'startkey='.$kval;
+				$query_string .= (!empty($query_string)?'&':'').'startkey='.$kval;
 			}
 			
 			$kval = stripslashes(post_var('endkey'));
 			if(!empty($kval)) {
 				$opts['endkey'] = json_decode($kval);
-				$url .= (!empty($url)?'&':'').'endkey='.$kval;
+				$query_string .= (!empty($query_string)?'&':'').'endkey='.$kval;
 			}
 		}
 		
 		$desc = intval(post_var('descending'));
 		$opts['descending'] = !empty($desc);
 		if($opts['descending'])
-			$url .= (!empty($url)?'&':'').'descending=true';
+			$query_string .= (!empty($query_string)?'&':'').'descending=true';
 		
 		$incl_docs = intval(post_var('include_docs'));
 		$opts['include_docs'] = !empty($incl_docs);
 		if($opts['include_docs'])
-			$url .= (!empty($url)?'&':'').'include_docs=true';
+			$query_string .= (!empty($query_string)?'&':'').'include_docs=true';
 			
 		$limit = post_var('limit');
 		if(strlen($limit) > 0 && is_numeric($limit)) {
 			$opts['limit'] = intval($limit);
 			
 			if($opts['limit'] > 0)
-				$url .= (!empty($url)?'&':'').'limit='.$opts['limit'];
+				$query_string .= (!empty($query_string)?'&':'').'limit='.$opts['limit'];
 		}
 		
 		$skip = post_var('skip');
@@ -72,25 +72,25 @@ if(!empty($cmd)) {
 			$opts['skip'] = intval($skip);
 			
 			if($opts['skip'] > 0)
-				$url .= (!empty($url)?'&':'').'skip='.$opts['skip'];
+				$query_string .= (!empty($query_string)?'&':'').'skip='.$opts['skip'];
 		}
 		
 		$reduce = post_var('reduce');
 		if(strlen($reduce) > 0) {
 			$opts['reduce'] = (bool) intval($reduce);
-			$url .= (!empty($url)?'&':'').'reduce='.($opts['reduce']===true ? 'true' : 'false');
+			$query_string .= (!empty($url)?'&':'').'reduce='.($opts['reduce']===true ? 'true' : 'false');
 		
 			if($opts['reduce']) {
 				$group = intval(post_var('group'));
 				if(!empty($group)) {
 					$opts['group'] = true;
-					$url .= (!empty($url)?'&':'').'group=true';
+					$query_string .= (!empty($query_string)?'&':'').'group=true';
 				}
 				
 				$group_level = post_var('group_level');
 				if(strlen($group_level) > 0 && is_numeric($group_level) && intval($group_level) > 0) {
 					$opts['group_level'] = intval($group_level);
-					$url .= (!empty($url)?'&':'').'group_level='.$opts['group_level'];
+					$query_string .= (!empty($query_string)?'&':'').'group_level='.$opts['group_level'];
 				}
 			}
 		}
@@ -113,18 +113,19 @@ if(!empty($cmd)) {
 	
 		$time_diff = millis_time()-$start_time;
 		
+		$url = '';
 		$url_parts = parse_url($cdb[$cdb_inx]->getDatabaseUri());
 		if($url_parts === FALSE) 
-			$url = 'http://localhost:5984/beta4/'.$ddoc.'/_view/'.$view.'?'.$url;
+			$url = 'http://localhost:5984/beta4/'.$ddoc.'/_view/'.$view.(!empty($query_string)?'?'.$query_string:'');
 		else {
-			$url2 = empty($url_parts['scheme'])?'http://':$url_parts['scheme'].'://';
+			$url = empty($url_parts['scheme'])?'http://':$url_parts['scheme'].'://';
 			
 			if(!empty($url_parts['user']) || !empty($url_parts['pass']))
-				$url2 .= 'user:pass@';
+				$url .= 'user:pass@';
 				
-			$url2 .= $url_parts['host'].':'.$url_parts['port'].$url_parts['path'];
+			$url .= $url_parts['host'].':'.$url_parts['port'].$url_parts['path'];
 
-			$url = $url2.'/'.$ddoc.'/_view/'.$view.'?'.$url;
+			$url .= '/'.$ddoc.'/_view/'.$view.(!empty($query_string)?'?'.$query_string:'');
 		}
 		
 		echo '<div class="qr_item">REST URL:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'.$url.'</div>';

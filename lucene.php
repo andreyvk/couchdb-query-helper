@@ -17,22 +17,22 @@ if(!empty($cmd)) {
 		if(!isset($cdb[$cdb_inx])) exit();
 		if(empty($ddoc) || empty($view)) exit();
 		
-		$url = '';
+		$query_string = '';
 		
 		$q = post_var('q');
-		if(!empty($q)) $url .= 'q='.$q;
+		if(!empty($q)) $query_string .= 'q='.$q;
 		
 		$incl_docs = intval(post_var('include_docs'));
 		$opts['include_docs'] = !empty($incl_docs);
 		if($opts['include_docs'])
-			$url .= (!empty($url)?'&':'').'include_docs=true';
+			$query_string .= (!empty($query_string)?'&':'').'include_docs=true';
 			
 		$limit = post_var('limit');
 		if(strlen($limit) > 0 && is_numeric($limit)) {
 			$opts['limit'] = intval($limit);
 			
 			if($opts['limit'] > 0)
-				$url .= (!empty($url)?'&':'').'limit='.$opts['limit'];
+				$query_string .= (!empty($query_string)?'&':'').'limit='.$opts['limit'];
 		}
 		
 		$skip = post_var('skip');
@@ -40,13 +40,13 @@ if(!empty($cmd)) {
 			$opts['skip'] = intval($skip);
 
 			if($opts['skip'] > 0)
-				$url .= (!empty($url)?'&':'').'skip='.$opts['skip'];
+				$query_string .= (!empty($query_string)?'&':'').'skip='.$opts['skip'];
 		}
 		
 		$sort = post_var('sort');
 		if(strlen($sort) > 0) {
 			$opts['sort'] = stripslashes($sort);
-			$url .= (!empty($url)?'&':'').'sort='.$opts['sort'];
+			$query_string .= (!empty($query_string)?'&':'').'sort='.$opts['sort'];
 		}
 		
 		/* echo '<pre>'.print_r($ddoc, true).'</pre>';
@@ -67,18 +67,18 @@ if(!empty($cmd)) {
 		
 		$time_diff = millis_time()-$start_time;
 		
+		$url = '';
 		$url_parts = parse_url($cdb[$cdb_inx]->getDatabaseUri());
 		if($url_parts === FALSE) 
-			$url = 'http://localhost:5984/beta4/_fti/'.$ddoc.'/'.$view.(!empty($url)? '?'.$url : '');
+			$url = 'http://localhost:5984/beta4/_fti/'.$ddoc.'/'.$view.(!empty($query_string)? '?'.$query_string : '');
 		else {
-			$url2 = empty($url_parts['scheme'])?'http://':$url_parts['scheme'].'://';
+			$url = empty($url_parts['scheme'])?'http://':$url_parts['scheme'].'://';
 			
 			if(!empty($url_parts['user']) || !empty($url_parts['pass']))
-				$url2 .= 'user:pass@';
+				$url .= 'user:pass@';
 				
-			$url2 .= $url_parts['host'].':'.$url_parts['port'].$url_parts['path'].'/_fti';
-
-			$url = $url2.'/'.$ddoc.'/'.$view.(!empty($url)? '?'.$url : '');
+			$url .= $url_parts['host'].':'.$url_parts['port'].$url_parts['path'].'/_fti';
+			$url .= '/'.$ddoc.'/'.$view.(!empty($query_string)? '?'.$query_string : '');
 		}
 		
 		if(!isset($opts['limit'])) {
@@ -90,26 +90,35 @@ if(!empty($cmd)) {
 		
 		$res_format = post_var('result_format');
 		if($res_format == 'raw') {
-			echo '<div class="qr_item">QUERY RESULT:</div>';
+			echo '<div class="qr_item">'.(empty($q)?'VIEW INFO':'QUERY RESULT').':</div>';
 			echo '<div class="qr_item">'.json_encode_and_format($res).'</div>';
 		}
 		else if($res_format == 'tree') {
-			echo '<div class="qr_item">TOTAL ROWS:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'.$res->total_rows.'</div>';
-			echo '<div class="qr_item">ETAG:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'.$res->etag.'</div>';
-			echo '<div class="qr_item">SEARCH DURATION:&nbsp;'.$res->search_duration.'</div>';
-			echo '<div class="qr_item">FETCH DURATION:&nbsp;&nbsp;'.$res->fetch_duration.'</div>';
-			echo '<div class="qr_item">RESULT ROWS:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'.count($res->rows).'</div>';
-			echo '<div class="qr_item">QUERY RESULT:</div>';
-			$cnt = 0;
-			foreach($res->rows as $row) {
-				$key = new stdClass();
-				$key->score = $row->score;
-				$key->id = $row->id;
-				
+			if(empty($q)) {
+				echo '<div class="qr_item">VIEW INFO:</div>';
 				echo '<div class="qr_item">';
-					echo '<div class="qr_tree_item clickable">'.json_encode($key).'</div>';
-					echo '<div class="qr_tree_content"'.(++$cnt>1?' style="display: none;"':'').'>'.json_encode_and_format($row).'</div>';
+				echo '<div class="qr_tree_item clickable">'.$postf.'/'.$view.'</div>';
+				echo '<div class="qr_tree_content">'.json_encode_and_format($res).'</div>';
 				echo '</div>';
+			}
+			else {
+				echo '<div class="qr_item">TOTAL ROWS:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'.$res->total_rows.'</div>';
+				echo '<div class="qr_item">ETAG:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'.$res->etag.'</div>';
+				echo '<div class="qr_item">SEARCH DURATION:&nbsp;'.$res->search_duration.'</div>';
+				echo '<div class="qr_item">FETCH DURATION:&nbsp;&nbsp;'.$res->fetch_duration.'</div>';
+				echo '<div class="qr_item">RESULT ROWS:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'.count($res->rows).'</div>';
+				echo '<div class="qr_item">QUERY RESULT:</div>';
+				$cnt = 0;
+				foreach($res->rows as $row) {
+					$key = new stdClass();
+					$key->score = $row->score;
+					$key->id = $row->id;
+					
+					echo '<div class="qr_item">';
+						echo '<div class="qr_tree_item clickable">'.json_encode($key).'</div>';
+						echo '<div class="qr_tree_content"'.(++$cnt>1?' style="display: none;"':'').'>'.json_encode_and_format($row).'</div>';
+					echo '</div>';
+				}
 			}
 		}
 	}
