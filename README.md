@@ -19,23 +19,17 @@ Quick-Start Guide
 
 1. Copy project folder to any web directory
    
-2. Configure CouchDB access through config.php
+2. Configure CouchDB access through config.php. Note that you may configure more than one database at a time.
         
         <?php
 		...
 		
-        $cdb = new couchClient("http://<user>:<pass>@<host>:<port>/", "<db_name>");
+        $cdb[0] = new couchClient("http://<user>:<pass>@<host>:<port>/", "<db_name>"); 
 		?>
 
 3. Just use it by running couch.php or lucene.php from your browser
 
 
-Requests
-========
-		
-Do fork and send pull requests if you wish to modify or add something
-
-		
 Feedback
 ========
 

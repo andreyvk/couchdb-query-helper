@@ -8,17 +8,19 @@ if(!empty($cmd)) {
 	if($cmd == 'query_view') {
 		$opts = array();
 		
+		$cdb_inx = post_var('cdb_inx');
 		$ddoc = post_var('ddoc_id');
 		$view = post_var('view');	
 		
-		if(empty($ddoc) || empty($view)) {
-			exit();
-		}
+		if(strlen($cdb_inx) == 0) exit();
+		$cdb_inx = intval($cdb_inx);
+		if(!isset($cdb[$cdb_inx])) exit();
+		if(empty($ddoc) || empty($view)) exit();
 		
 		$url = '';
 		
 		$q = post_var('q');
-		$url .= (!empty($url)?'&':'').'q='.$q;
+		if(!empty($q)) $url .= 'q='.$q;
 		
 		$incl_docs = intval(post_var('include_docs'));
 		$opts['include_docs'] = !empty($incl_docs);
@@ -56,7 +58,7 @@ if(!empty($cmd)) {
 		$start_time = millis_time();
 		
 		try {
-			$res = $cdb->setLuceneQueryParameters($opts)->getLuceneView($postf, $view, $q);
+			$res = $cdb[$cdb_inx]->setLuceneQueryParameters($opts)->getLuceneView($postf, $view, $q);
 		}
 		catch(Exception $e) {
 			echo '<pre>'.$e->getCode().': '.$e->getMessage().'</pre>';
@@ -65,9 +67,9 @@ if(!empty($cmd)) {
 		
 		$time_diff = millis_time()-$start_time;
 		
-		$url_parts = parse_url($cdb->getDatabaseUri());
+		$url_parts = parse_url($cdb[$cdb_inx]->getDatabaseUri());
 		if($url_parts === FALSE) 
-			$url = 'http://localhost:5984/beta4/_fti/'.$ddoc.'/'.$view.'?'.$url;
+			$url = 'http://localhost:5984/beta4/_fti/'.$ddoc.'/'.$view.(!empty($url)? '?'.$url : '');
 		else {
 			$url2 = empty($url_parts['scheme'])?'http://':$url_parts['scheme'].'://';
 			
@@ -76,7 +78,7 @@ if(!empty($cmd)) {
 				
 			$url2 .= $url_parts['host'].':'.$url_parts['port'].$url_parts['path'].'/_fti';
 
-			$url = $url2.'/'.$ddoc.'/'.$view.'?'.$url;
+			$url = $url2.'/'.$ddoc.'/'.$view.(!empty($url)? '?'.$url : '');
 		}
 		
 		if(!isset($opts['limit'])) {
@@ -111,15 +113,45 @@ if(!empty($cmd)) {
 			}
 		}
 	}
-	else if($cmd == 'ddoc_views') {
-		$ddoc = post_var('ddoc_id');	
-		if(empty($ddoc)) {
-			echo json_encode(array('views'=>array()));
-			exit();
-		}
+	else if($cmd == 'ddocs') {
+		$cdb_inx = post_var('cdb_inx');	
 		
 		try {
-			$ddoc = $cdb->getDoc($ddoc);
+			if(strlen($cdb_inx) == 0) throw new Exception();
+			$cdb_inx = intval($cdb_inx);
+			if(!isset($cdb[$cdb_inx])) throw new Exception();
+			
+			$ddocs = array();
+			$res = $cdb[$cdb_inx]->setQueryParameters(array('startkey'=>'_design/', 'endkey'=>'_design/'.unichr(0xFFF0)))
+									->getAllDocs();
+						
+			foreach($res->rows as $row) {
+				if(strpos($row->id, '_design/lucene') !== 0) continue ;
+				
+				$ddocs[] = $row->id;
+			}
+			
+			echo json_encode(array('docs'=>$ddocs));
+		} 
+		catch(Exception $e) {
+			echo json_encode(array('error'=>true));
+		}
+	}
+	else if($cmd == 'ddoc_views') {
+		$cdb_inx = post_var('cdb_inx');	
+		$ddoc = post_var('ddoc_id');	
+			
+		try {
+			if(empty($ddoc)) {
+				echo json_encode(array('views'=>array()));
+				exit();
+			}
+
+			if(strlen($cdb_inx) == 0) throw new Exception();
+			$cdb_inx = intval($cdb_inx);
+			if(!isset($cdb[$cdb_inx])) throw new Exception();
+			
+			$ddoc = $cdb[$cdb_inx]->getDoc($ddoc);
 			
 			$views = array();
 			if(!empty($ddoc->fulltext)) {
@@ -134,19 +166,21 @@ if(!empty($cmd)) {
 		}
 	}
 	else if($cmd == 'ddoc_view_info') {
-		$ddoc_id = post_var('ddoc_id');	
-
+		$cdb_inx = post_var('cdb_inx');	
+		$ddoc_id = post_var('ddoc_id');
 		$view = post_var('view');	
-		if(empty($ddoc_id) || empty($view)) {
-			echo json_encode(array('error'=>true));
-			exit();
-		}
 		
 		try {	
+			if(empty($ddoc_id) || empty($view)) throw new Exception();
+		
+			if(strlen($cdb_inx) == 0) throw new Exception();
+			$cdb_inx = intval($cdb_inx);
+			if(!isset($cdb[$cdb_inx])) throw new Exception();
+		
 			list($pref, $postf) = explode('/', $ddoc_id);
-			$res = $cdb->setLuceneQueryParameters(array())->getLuceneView($postf, $view);
+			$res = $cdb[$cdb_inx]->setLuceneQueryParameters(array())->getLuceneView($postf, $view);
 
-			$ddoc = $cdb->getDoc($ddoc_id);
+			$ddoc = $cdb[$cdb_inx]->getDoc($ddoc_id);
 			$view_doc = @$ddoc->fulltext->{$view}->index;
 			
 			if(isset($res->fields)) {
@@ -167,21 +201,6 @@ if(!empty($cmd)) {
 	exit();
 }
 
-$design_docs = array();
-try {
-	$res = $cdb->setQueryParameters(array('startkey'=>'_design/', 'endkey'=>'_design/'.unichr(0xFFF0)))
-				->getAllDocs();
-				
-	foreach($res->rows as $row) {
-		if(strpos($row->id, '_design/lucene') !== 0) continue ;
-		
-		$design_docs[] = $row->id;
-	}
-} 
-catch(Exception $e) {
-	die('Failed retrieving all design documents');
-}
-
 ?>
 
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -194,7 +213,7 @@ catch(Exception $e) {
 <title>Lucene Query Helper</title>
 <script type="text/javascript" src="http://code.jquery.com/jquery-1.7.2.min.js"></script>
 <style type="text/css">
-body { font-family: Courier New; font-size: 14px; }
+body { font-family: Courier New; font-size: 14px; margin: 10px; padding: 0; }
 input, select, textarea{ border: 1px solid #CCC; font-family: Courier New; margin-bottom: 3px; font-size: 12px; padding: 5px 3px; }
 button { background-color: #E9E9E9; border: 1px solid #CCC; font-family: Courier New;  }
 button:hover { background-color: #F0F0F0; }
@@ -223,15 +242,39 @@ $(function() {
 		$('#ksel_tab_'+type).show();
 	});
 	
+	$('#cdb_sel').change(function() {
+		var cdb = $(this).val();
+		$.ajax({
+			url: 'lucene.php',
+			type: 'POST',
+			dataType: 'json',
+			data: {'cmd': 'ddocs', 'cdb_inx': cdb},
+			success: function(resp) {
+				if(!resp || resp.error) {
+					$('#ddoc_sel').html('<option value="">-- Not Found --</option>');
+				}
+				
+				$('#ddoc_sel').html('<option value="">-- Choose One --</option>');
+				for(var i in resp.docs) {
+					$('#ddoc_sel').append('<option value="'+resp.docs[i]+'">'+resp.docs[i].split('/')[1]+'</option>');
+				}
+			},
+			error: function() {
+				$('#ddoc_sel').html('<option value="">-- Not Found --</option>');
+			}
+		});
+	});
+	
 	$('#ddoc_sel').change(function() {
 		$('#ddocview_sel').html('<option value="">Loading...&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</option>');
 		
+		var cdb = $('#cdb_sel').val();
 		var ddoc = $(this).val();
 		$.ajax({
 			url: 'lucene.php',
 			type: 'POST',
 			dataType: 'json',
-			data: {'cmd': 'ddoc_views', 'ddoc_id': ddoc},
+			data: {'cmd': 'ddoc_views', 'cdb_inx': cdb, 'ddoc_id': ddoc},
 			success: function(resp) {
 				if(!resp || resp.error) {
 					$('#ddocview_sel').html('<option value="">-- Not Found --</option>');
@@ -254,6 +297,7 @@ $(function() {
 	$('#ddocview_sel').change(function() {	
 		$('#sort_field_sel').html('<option value="">-- by none--</option>');
 		
+		var cdb = $('#cdb_sel').val();
 		var view = $(this).val();
 	
 		if(view.length == 0) {
@@ -262,7 +306,7 @@ $(function() {
 			$('#ddoc_view_info').html('Loading...');
 			
 			var params = {'cmd': 'ddoc_view_info'};
-			
+			params.cdb_inx = cdb;
 			params.ddoc_id = $('#ddoc_sel').val();
 			params.view = $('#ddocview_sel').val();
 
@@ -317,8 +361,10 @@ $(function() {
 		
 		$('#query_loading').show();
 		
-		var params = {'cmd': 'query_view'};
+		var cdb = $('#cdb_sel').val();
 		
+		var params = {'cmd': 'query_view'};
+		params.cdb_inx = cdb;
 		params.ddoc_id = $('#ddoc_sel').val();
 		params.view = $('#ddocview_sel').val();
 		
@@ -386,20 +432,30 @@ function escapeHtml(unsafe) {
 </head>
 <body>
 	<form>
-		<div id="ddoc" class="float_left" style="margin: 0 30px 20px 0;">
-			<label for="ddoc_sel"><b>Design Doc</b></label>
-			<select id="ddoc_sel">
+		<div style="position: absolute; right: 0; top: 0; padding: 10px; -moz-box-shadow: 2px 2px 2px 3px #ccc; -webkit-box-shadow:2px 2px 2px 3px #ccc; box-shadow: 2px 2px 2px 3px #ccc;">
+			<label for="cdb_sel"><b>Database</b></label>
+			<select id="cdb_sel">
 				<option value="">-- Choose One --</option>
 			<?php 
-				foreach($design_docs as $ddoc) {
-					list($pref, $postf) = explode('/', $ddoc);
-					echo '<option value="'.$ddoc.'">'.$postf.'</option>';
+				foreach($cdb as $i=>$db) {
+					$url = parse_url($db->getDatabaseUri());
+					if($url) {
+						$url['path'] = substr($url['path'], 1);
+						echo '<option value="'.$i.'">'.$url['path'].' ('.$url['host'].':'.$url['port'].')</option>';
+					}
 				}
 			?>
 			</select>
 		</div>
 		
-		<div id="ddocview" class="float_left" style="margin: 0 30px 20px 0;">
+		<div class="float_left" style="margin: 0 30px 20px 0;">
+			<label for="ddoc_sel"><b>Design Doc</b></label>
+			<select id="ddoc_sel">
+				<option value="">-- Choose One --</option>
+			</select>
+		</div>
+		
+		<div class="float_left" style="margin: 0 30px 20px 0;">
 			<label for="ddocview_sel"><b>View</b></label>
 			<select id="ddocview_sel">
 				<option value="">-- Not Found --</option>
