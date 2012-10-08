@@ -285,7 +285,10 @@ $(function() {
 		$('#ksel_tab_'+type).show();
 	});
 	
-	$('#cdb_sel').change(function() {
+	$('#cdb_sel').change(function() {	
+		$('#ddoc_sel').html('<option value="">Loading...&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</option>');
+		$('#ddocview_sel').html('<option value="">-- Not Found --</option>');
+		
 		var cdb = $(this).val();
 		$.ajax({
 			url: 'couch.php',
@@ -511,7 +514,7 @@ $(function() {
 		<div class="float_left" style="margin: 0 30px 20px 0;">
 			<label for="ddoc_sel"><b>Design Doc</b></label>
 			<select id="ddoc_sel">
-				<option value="">-- Choose One --</option>
+				<option value="">-- Not Found --</option>
 			<?php 
 				/* foreach($design_docs as $ddoc) {
 					list($pref, $postf) = explode('/', $ddoc);

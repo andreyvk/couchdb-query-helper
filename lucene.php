@@ -19,7 +19,7 @@ if(!empty($cmd)) {
 		
 		$query_string = '';
 		
-		$q = post_var('q');
+		$q = stripslashes(post_var('q'));
 		if(!empty($q)) $query_string .= 'q='.$q;
 		
 		$incl_docs = intval(post_var('include_docs'));
@@ -102,6 +102,7 @@ if(!empty($cmd)) {
 				echo '</div>';
 			}
 			else {
+				echo '<div class="qr_item">Q:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'.$res->q.'</div>';
 				echo '<div class="qr_item">TOTAL ROWS:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'.$res->total_rows.'</div>';
 				echo '<div class="qr_item">ETAG:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'.$res->etag.'</div>';
 				echo '<div class="qr_item">SEARCH DURATION:&nbsp;'.$res->search_duration.'</div>';
@@ -251,7 +252,10 @@ $(function() {
 		$('#ksel_tab_'+type).show();
 	});
 	
-	$('#cdb_sel').change(function() {
+	$('#cdb_sel').change(function() {	
+		$('#ddoc_sel').html('<option value="">Loading...&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</option>');
+		$('#ddocview_sel').html('<option value="">-- Not Found --</option>');
+		
 		var cdb = $(this).val();
 		$.ajax({
 			url: 'lucene.php',
@@ -460,7 +464,7 @@ function escapeHtml(unsafe) {
 		<div class="float_left" style="margin: 0 30px 20px 0;">
 			<label for="ddoc_sel"><b>Design Doc</b></label>
 			<select id="ddoc_sel">
-				<option value="">-- Choose One --</option>
+				<option value="">-- Not Found --</option>
 			</select>
 		</div>
 		
